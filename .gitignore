@@ -1,0 +1,40 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== 环境变量与密钥（切勿提交真实 Token / API Key）=====
+.env
+.env.*
+!.env.example
+
+# ===== 测试与缓存 =====
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+
+# ===== 日志 =====
+*.log
