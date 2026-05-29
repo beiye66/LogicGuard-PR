@@ -16,7 +16,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 
 # ---------------------------------------------------------------------------
 # 基础配置
@@ -64,8 +64,8 @@ class GitHubPRFetcher:
             logger.error("环境变量 GITHUB_TOKEN 未设置，无法初始化 GitHub 客户端。")
             raise ValueError("未检测到 GITHUB_TOKEN，请在 .env 文件中配置后重试。")
 
-        # 使用 Token 构造已认证的 GitHub 客户端。
-        self._client: Github = Github(token)
+        # 使用 Token 构造已认证的 GitHub 客户端（采用新版 Auth.Token 接口，避免废弃告警）。
+        self._client: Github = Github(auth=Auth.Token(token))
         logger.info("GitHub 客户端初始化成功。")
 
     def get_pr_diff(self, repo_name: str, pr_number: int) -> list[dict]:
