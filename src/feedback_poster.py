@@ -76,16 +76,40 @@ class FeedbackPoster:
         """
         return f"{_COMMENT_MARKER}\n{_COMMENT_TITLE}\n\n{review_markdown.strip()}{_COMMENT_FOOTER}"
 
-    def post_review(self, repo_name: str, pr_number: int, review_markdown: str) -> str:
-        """将审查结果作为 Issue Comment 发布到指定 PR。
+    def _find_existing_comment(self, pull_request: object) -> object | None:
+        """在 PR 已有评论中查找本工具上次发布的评论（按隐藏标记识别）。
+
+        Args:
+            pull_request: PyGithub 的 PullRequest 对象。
+
+        Returns:
+            匹配到隐藏标记的 IssueComment 对象；未找到则返回 None。
+        """
+        for comment in pull_request.get_issue_comments():
+            if _COMMENT_MARKER in (comment.body or ""):
+                return comment
+        return None
+
+    def post_review(
+        self,
+        repo_name: str,
+        pr_number: int,
+        review_markdown: str,
+        update_existing: bool = True,
+    ) -> str:
+        """将审查结果作为 Issue Comment 发布 / 更新到指定 PR。
+
+        当 ``update_existing`` 为 True 时，优先查找本工具上次发布的评论（按隐藏标记识别），
+        找到则原地更新（edit）而非新建，避免在 PR 多次 push 时刷屏。
 
         Args:
             repo_name: 仓库全名，格式 ``"owner/repo"``。
             pr_number: 目标 Pull Request 编号。
             review_markdown: 待发布的 Markdown 审查正文（通常来自 AIReviewer.analyze_pr）。
+            update_existing: 是否复用并更新已有的机器人评论；默认 True。
 
         Returns:
-            新建评论的 HTML 链接（html_url），便于日志记录与跳转查看。
+            评论的 HTML 链接（html_url），便于日志记录与跳转查看。
 
         Raises:
             ValueError: 当 review_markdown 为空时抛出，避免发布无意义的空评论。
@@ -99,10 +123,17 @@ class FeedbackPoster:
         body = self._format_comment(review_markdown)
 
         try:
-            logger.info("正在向 %s 的 PR #%d 发布审查评论 ...", repo_name, pr_number)
             repo = self._client.get_repo(repo_name)
             pull_request = repo.get_pull(pr_number)
-            comment = pull_request.create_issue_comment(body)
+
+            existing = self._find_existing_comment(pull_request) if update_existing else None
+            if existing is not None:
+                logger.info("发现既有机器人评论，更新 %s 的 PR #%d 评论 ...", repo_name, pr_number)
+                existing.edit(body)
+                comment = existing
+            else:
+                logger.info("正在向 %s 的 PR #%d 发布审查评论 ...", repo_name, pr_number)
+                comment = pull_request.create_issue_comment(body)
         except GithubException as exc:
             logger.error(
                 "发布 PR 评论失败（repo=%s, pr=%d）：status=%s, data=%s",
