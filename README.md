@@ -278,9 +278,17 @@ LogicGuard-PR/
 
 ## 🗺️ Roadmap
 
-- [x] **多模型路由**：统一调度 OpenAI / DeepSeek / Gemini（openai 兼容）与 Claude（anthropic SDK），按需选模型。
-- [ ] **行级评论（Review Comment）**：在具体代码行上给出建议（需可靠的行号定位）。
+**已实现：**
+
+- [x] **多模型路由**：统一调度 OpenAI / DeepSeek / Gemini / 豆包（openai 兼容）与 Claude（anthropic SDK），按需选模型。
 - [x] **增量审查**：仅审查相对上次的新增变更，进一步节省 token。
+- [x] **BYOK 自带 Key**：Web 端可使用自己的 API Key 与模型。
+- [x] **可复用 GitHub Action**：他人一行 `uses:` 即可接入自己的仓库。
+
+**未来展望：**
+
+- [ ] **行级评论（Review Comment）**：将风险直接锚定到具体代码行（GitHub Review Comment）。当前出于稳定性优先，采用「整体评论 + 文本标注行号」；行级锚定需 LLM 输出可靠的 diff 位置，计划在行号定位足够稳健后引入。
+- [ ] **审查报告导出 / 团队级配置**：支持导出审查报告，以及组织级统一规则配置。
 
 ---
 
