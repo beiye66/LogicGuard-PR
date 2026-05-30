@@ -15,7 +15,7 @@
 
 ---
 
-## 2. 自动化单元测试（共 28 个用例）
+## 2. 自动化单元测试（共 36 个用例）
 
 全部使用 `unittest.mock` 假冒外部依赖，**不需要真实 Token / 网络**，可在 CI 稳定运行。
 
@@ -23,7 +23,8 @@
 |---|---|---|
 | `tests/test_github_service.py` | 4 | diff 过滤（保留含 patch、剔除二进制）、缺 Token 早失败、API 异常向上抛出 |
 | `tests/test_context_builder.py` | 7 | token 估算、参数校验、预算内全纳入、单文件截断、超预算省略、空输入 |
-| `tests/test_ai_reviewer.py` | 4 | 缺 Key 早失败、返回 Markdown、空 diff 跳过 LLM、异常包装为 RuntimeError |
+| `tests/test_ai_reviewer.py` | 3 | 返回 Markdown、空 diff 跳过 LLM、LLMError 包装为 RuntimeError |
+| `tests/test_llm_client.py` | 9 | 厂商路由（provider 选择 / 模型名推断 / 缺 Key / 非法 provider）、双后端 complete 与异常包装 |
 | `tests/test_feedback_poster.py` | 5 | 缺 Token 早失败、新建评论、**更新既有评论（upsert）**、空内容拒发、API 异常 |
 | `tests/test_main.py` | 8 | 目标解析（CLI 优先 / 环境变量回退 / 缺失 / 非整数）、流程编排、空 diff 跳过、退出码 |
 

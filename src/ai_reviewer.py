@@ -5,28 +5,28 @@
 token 预算截断融合，再组装 Prompt 调用 LLM，产出可直接用于 PR 评论的 Markdown 审查结果。
 
 模型客户端：
-    使用 openai 官方 SDK 调用「OpenAI 兼容」的接口（DeepSeek / OpenAI / Gemini 兼容端点均可），
-    通过 base_url 切换厂商。利用 SDK 内置的 max_retries 重试与规范化异常类（OpenAIError）
-    来保证 Pipeline 的鲁棒性。
+    通过 :mod:`llm_client` 的多模型路由获取 LLM 客户端，支持 OpenAI 兼容厂商
+    （OpenAI / DeepSeek / Gemini）与 Anthropic（Claude）。本模块不关心具体厂商，
+    只依赖 :class:`LLMClient` 抽象，由其内置重试与统一异常（LLMError）保证鲁棒性。
 
 设计原则：
-    - 防御性编程：缺失配置早失败；LLM 调用捕获 OpenAIError 并记录后抛出明确错误。
+    - 防御性编程：缺失配置早失败；LLM 调用失败（LLMError）记录后抛出明确错误。
     - 日志记录：使用 logging。
     - 类型注解 + 中文 Docstring。
-    - 模块化：截断逻辑复用 ContextBuilder，本模块只负责「组装 Prompt + 调用 LLM」。
+    - 模块化：截断逻辑复用 ContextBuilder，模型路由下沉到 llm_client，
+      本模块只负责「组装 Prompt + 调用 LLMClient」。
 """
 
 from __future__ import annotations
 
 import logging
-import os
 
 from dotenv import load_dotenv
-from openai import OpenAI, OpenAIError
 
 from context_builder import ContextBuilder
+from llm_client import LLMClient, LLMError, create_llm_client
 
-# 加载 .env 中的 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 等配置。
+# 加载 .env 中的 LLM_PROVIDER / LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 等配置。
 load_dotenv()
 
 logging.basicConfig(
@@ -36,10 +36,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-# 默认指向 DeepSeek 的 OpenAI 兼容端点；可通过环境变量覆盖以切换其它厂商。
-_DEFAULT_BASE_URL = "https://api.deepseek.com"
-_DEFAULT_MODEL = "deepseek-chat"
 
 # 系统提示词：定义审查专家角色、两项任务，以及「低误报」硬约束与纯 Markdown 输出要求。
 _SYSTEM_PROMPT = """你是一名经验丰富的资深软件工程师，正在对一个 GitHub Pull Request 的代码变更（diff）进行审查。
@@ -66,57 +62,34 @@ class AIReviewer:
 
     def __init__(
         self,
+        llm_client: LLMClient | None = None,
         context_builder: ContextBuilder | None = None,
-        timeout: float = 60.0,
-        max_retries: int = 3,
     ) -> None:
         """初始化 AI 审查器。
 
-        从环境变量读取 LLM 配置并构造 openai 客户端：
-        ``LLM_API_KEY``（必填）、``LLM_BASE_URL``（选填，默认 DeepSeek）、
-        ``LLM_MODEL``（选填，默认 deepseek-chat）。
-
         Args:
+            llm_client: LLM 客户端；传 None 时由 :func:`create_llm_client` 按环境变量
+                （LLM_PROVIDER / LLM_MODEL / LLM_API_KEY 等）自动路由到 OpenAI 兼容或 Anthropic 后端。
             context_builder: 用于截断 / 融合 diff 的 ContextBuilder 实例；
                 传 None 时使用默认配置新建一个。
-            timeout: 单次请求超时时间（秒）。
-            max_retries: SDK 内置的失败重试次数（针对网络 / 限流等可重试错误）。
 
         Raises:
-            ValueError: 当环境变量 ``LLM_API_KEY`` 未设置或为空时抛出。
+            LLMError: 当自动创建客户端时缺少必要配置（如 API Key）或 provider 不受支持。
         """
-        api_key: str | None = os.getenv("LLM_API_KEY")
-        if not api_key:
-            logger.error("环境变量 LLM_API_KEY 未设置，无法初始化 AI 审查器。")
-            raise ValueError("未检测到 LLM_API_KEY，请在 .env 文件中配置后重试。")
-
-        self._base_url: str = os.getenv("LLM_BASE_URL") or _DEFAULT_BASE_URL
-        self._model: str = os.getenv("LLM_MODEL") or _DEFAULT_MODEL
-
-        # 利用 SDK 内置的超时与重试机制保证鲁棒性。
-        self._client: OpenAI = OpenAI(
-            api_key=api_key,
-            base_url=self._base_url,
-            timeout=timeout,
-            max_retries=max_retries,
-        )
+        self._client: LLMClient = llm_client or create_llm_client()
         self._builder: ContextBuilder = context_builder or ContextBuilder()
-        logger.info("AI 审查器初始化成功（base_url=%s, model=%s）。", self._base_url, self._model)
+        logger.info("AI 审查器初始化成功。")
 
-    def _build_messages(self, context_text: str) -> list[dict[str, str]]:
-        """组装发送给 LLM 的对话消息。
+    def _build_user_prompt(self, context_text: str) -> str:
+        """组装用户提示词。
 
         Args:
             context_text: 经 ContextBuilder 融合 / 截断后的 diff 上下文文本。
 
         Returns:
-            符合 openai chat.completions 接口的 messages 列表（system + user）。
+            用户提示词文本。
         """
-        user_prompt = f"以下是本次 PR 的代码变更（diff）：\n\n{context_text}"
-        return [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        return f"以下是本次 PR 的代码变更（diff）：\n\n{context_text}"
 
     def analyze_pr(self, diff_data: list[dict]) -> str:
         """分析 PR 的代码变更，返回 Markdown 格式的审查结论。
@@ -140,21 +113,16 @@ class AIReviewer:
             logger.info("无可分析的 diff 内容，跳过 LLM 调用。")
             return "## 审查结果\n\n本次 PR 未包含可分析的代码变更。"
 
-        messages = self._build_messages(fused.text)
+        user_prompt = self._build_user_prompt(fused.text)
 
         try:
-            logger.info("正在调用 LLM 进行 PR 审查（model=%s）...", self._model)
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                temperature=0.2,  # 低温度，减少臆造、提升稳定性，契合「低误报」要求
-            )
-        except OpenAIError as exc:
-            # SDK 内置重试耗尽后仍失败，记录规范化异常并抛出明确错误。
+            logger.info("正在调用 LLM 进行 PR 审查 ...")
+            content = self._client.complete(_SYSTEM_PROMPT, user_prompt).strip()
+        except LLMError as exc:
+            # 后端内置重试耗尽后仍失败，记录统一异常并抛出明确错误。
             logger.error("调用 LLM 失败：%s", exc)
             raise RuntimeError(f"调用 LLM 失败：{exc}") from exc
 
-        content = (response.choices[0].message.content or "").strip()
         if not content:
             logger.warning("LLM 返回了空内容。")
             return "## 审查结果\n\nLLM 未返回有效内容，请稍后重试。"
