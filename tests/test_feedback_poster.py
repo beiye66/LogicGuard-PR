@@ -24,12 +24,13 @@ def test_missing_token_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_post_review_creates_issue_comment(
     mock_github_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """post_review 应调用 create_issue_comment，正文含标题/标记，并返回 html_url。"""
+    """无既有评论时，post_review 应新建评论，正文含标题/标记，并返回 html_url。"""
     monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
 
     mock_client = MagicMock()
     mock_github_cls.return_value = mock_client
     mock_pr = MagicMock()
+    mock_pr.get_issue_comments.return_value = []  # 没有既有的机器人评论
     mock_comment = MagicMock()
     mock_comment.html_url = "https://github.com/owner/repo/pull/1#issuecomment-1"
     mock_pr.create_issue_comment.return_value = mock_comment
@@ -47,6 +48,34 @@ def test_post_review_creates_issue_comment(
     assert "<!-- autonomous-pr-reviewer -->" in posted_body
     assert "🤖 Autonomous PR Reviewer" in posted_body
     assert "做了改动。" in posted_body
+
+
+@patch("feedback_poster.Github")
+def test_post_review_updates_existing_comment(
+    mock_github_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """存在带隐藏标记的既有评论时，应更新（edit）而非新建。"""
+    monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
+
+    mock_client = MagicMock()
+    mock_github_cls.return_value = mock_client
+    mock_pr = MagicMock()
+
+    existing = MagicMock()
+    existing.body = "<!-- autonomous-pr-reviewer -->\n## 🤖 Autonomous PR Reviewer\n旧内容"
+    existing.html_url = "https://github.com/owner/repo/pull/1#issuecomment-old"
+    other = MagicMock()
+    other.body = "一条普通的人工评论"
+    mock_pr.get_issue_comments.return_value = [other, existing]
+    mock_client.get_repo.return_value.get_pull.return_value = mock_pr
+
+    poster = FeedbackPoster()
+    url = poster.post_review("owner/repo", 1, "## 变更总结\n新内容。")
+
+    assert url == "https://github.com/owner/repo/pull/1#issuecomment-old"
+    existing.edit.assert_called_once()
+    mock_pr.create_issue_comment.assert_not_called()
+    assert "新内容。" in existing.edit.call_args.args[0]
 
 
 @patch("feedback_poster.Github")
