@@ -3,6 +3,7 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 cryptography==48.0.0
 idna==3.17
+openai==2.38.0
 pycparser==2.23
 PyGithub==2.9.1
 PyJWT==2.13.0
