@@ -15,6 +15,7 @@ from llm_client import (
     AnthropicClient,
     LLMError,
     OpenAICompatibleClient,
+    build_llm_client,
     create_llm_client,
 )
 
@@ -113,6 +114,32 @@ def test_openai_complete_wraps_error(mock_openai_cls: MagicMock) -> None:
     client = OpenAICompatibleClient(api_key="k", model="m", base_url="http://x")
     with pytest.raises(LLMError):
         client.complete("sys", "user")
+
+
+@patch("llm_client.OpenAI")
+def test_build_openai_client_from_config(mock_openai_cls: MagicMock) -> None:
+    """build_llm_client 按显式配置构建 OpenAI 兼容客户端（BYOK）。"""
+    client = build_llm_client("openai", api_key="k", model="deepseek-chat", base_url="https://x")
+    assert isinstance(client, OpenAICompatibleClient)
+
+
+@patch("llm_client.anthropic.Anthropic")
+def test_build_anthropic_client_from_config(mock_anthropic_cls: MagicMock) -> None:
+    """build_llm_client 按显式配置构建 Anthropic 客户端（BYOK）。"""
+    client = build_llm_client("anthropic", api_key="k", model="claude-sonnet-4-6")
+    assert isinstance(client, AnthropicClient)
+
+
+def test_build_missing_key_raises() -> None:
+    """build_llm_client 缺少 API Key 时抛 LLMError。"""
+    with pytest.raises(LLMError):
+        build_llm_client("openai", api_key="", model="x")
+
+
+def test_build_unsupported_provider_raises() -> None:
+    """build_llm_client 遇到非法 provider 抛 LLMError。"""
+    with pytest.raises(LLMError):
+        build_llm_client("gemini", api_key="k", model="x")
 
 
 @patch("llm_client.anthropic.Anthropic")
