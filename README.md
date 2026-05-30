@@ -17,6 +17,12 @@
 >
 > *（评委可通过此视频快速了解作品的设计思路与实际运行效果。）*
 
+## 🚀 在线体验（零配置，打开即用）
+
+> 无需登录、无需配置密钥，粘贴任意公开 GitHub PR 链接即可看到 AI 审查结果：
+>
+> ### 👉 [在此处粘贴你的 Hugging Face Spaces 在线体验链接](https://huggingface.co/spaces)
+
 ---
 
 ## ✨ 功能特性
@@ -30,7 +36,8 @@
 | ✂️ **Token 预算控制** | 超长 diff 自动按「逐文件预算」截断融合，防止超出大模型 token 限制 |
 | ♻️ **增量审查** | PR 多次推送时，仅审查自上次审查以来的**新增改动**（基于评论中记录的 head SHA），节省 token |
 | 💬 **评论防刷屏** | 同一 PR 多次推送时，**原地更新同一条评论**而非反复新建（基于隐藏标记 upsert） |
-| 🛡️ **工程化健壮** | 全程 `logging`、完整类型注解、防御性异常处理、内置重试；**42 个单元测试 + CI 守护主分支** |
+| 🌐 **零配置 Web 体验** | 提供 Streamlit 在线体验端：粘贴公开 PR 链接即可看到 AI 审查，无需登录 / 配置密钥 |
+| 🛡️ **工程化健壮** | 全程 `logging`、完整类型注解、防御性异常处理、内置重试；**46 个单元测试 + CI 守护主分支** |
 
 ---
 
@@ -114,6 +121,15 @@ pip install -r requirements.txt
 python src/main.py --repo owner/repo --pr 1
 ```
 
+### 方式三：本地启动 Web 体验端
+
+```bash
+# 配置好 .env 后启动 Streamlit（浏览器打开后粘贴公开 PR 链接即可）
+streamlit run app.py
+```
+
+> 线上版本部署于 Hugging Face Spaces（见页面顶部「在线体验」链接），密钥通过 Space Secrets 注入，评委零配置即可使用。
+
 ---
 
 ## 🛠️ 技术栈与第三方依赖
@@ -127,6 +143,7 @@ python src/main.py --repo owner/repo --pr 1
 | [anthropic](https://github.com/anthropics/anthropic-sdk-python) | 0.105.2 | 调用 Anthropic（Claude）大模型接口（含内置重试 / 规范化异常） | MIT |
 | [requests](https://requests.readthedocs.io/) | 2.32.5 | 通用 HTTP 请求支持 | Apache-2.0 |
 | [python-dotenv](https://github.com/theskumar/python-dotenv) | 1.2.1 | 从 `.env` 加载环境变量（Token / API Key） | BSD-3-Clause |
+| [streamlit](https://streamlit.io/) | ≥1.39 | Web 体验端（`app.py`）的纯 Python UI 框架 | Apache-2.0 |
 | [pytest](https://pytest.org/) *(dev)* | 8.3.4 | 单元测试框架（仅开发 / CI 使用） | MIT |
 
 - 运行时依赖见 [`requirements.txt`](requirements.txt)，开发依赖见 [`requirements-dev.txt`](requirements-dev.txt)。
@@ -144,6 +161,7 @@ python src/main.py --repo owner/repo --pr 1
 - **Step 4 的评论 upsert 去重机制**：基于隐藏标记识别并原地更新机器人评论，避免刷屏。
 - **多模型路由层**：`LLMClient` 抽象与 OpenAI 兼容 / Anthropic 双后端封装、按 `LLM_PROVIDER` 或模型名的路由策略、统一异常 `LLMError`（`llm_client.py`）。
 - **增量审查机制**：用评论隐藏标记记录已审查 head SHA，下次仅审查 `since_sha..head` 的增量，含 force-push 回退全量的兜底。
+- **Web 体验端**：基于 Streamlit 复用同一套 Pipeline，提供零配置在线试用（`app.py` + `pr_url.py` URL 解析）。
 - **过滤、异常处理、日志、退出码** 等防御性工程逻辑。
 
 第三方库仅用于其本职能力：`PyGithub` 提供 GitHub API 调用、`openai` / `anthropic` 提供各自 LLM 请求与重试、`python-dotenv` 提供配置加载、`requests` 提供 HTTP 基础能力。**审查"怎么做、做什么"的业务逻辑全部由本项目自行编写。**
@@ -152,7 +170,7 @@ python src/main.py --repo owner/repo --pr 1
 
 ## ✅ 测试与质量保障
 
-- **单元测试**：共 **42 个用例**，覆盖四个核心模块 + 多模型路由 + 编排器，全部使用 mock，**不依赖真实 Token / 网络**，可稳定在 CI 运行。
+- **单元测试**：共 **46 个用例**，覆盖四个核心模块 + 多模型路由 + 编排器 + URL 解析，全部使用 mock，**不依赖真实 Token / 网络**，可稳定在 CI 运行。
 - **持续集成**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在每次 push 到 `main` 及任意 PR 时自动运行「语法编译检查 + pytest」，**保证主分支始终可运行**。
 - **测试计划**：详见 [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md)（含自动化测试清单与演示截图复现步骤）。
 
@@ -173,14 +191,16 @@ LogicGuard-PR/
 ├── docs/
 │   ├── images/             # README 演示截图
 │   └── TEST_PLAN.md        # 测试计划
+├── app.py                  # Web 体验端入口（Streamlit）
 ├── src/
 │   ├── github_service.py   # Step 1 数据抓取
 │   ├── context_builder.py  # Step 2 上下文融合
 │   ├── ai_reviewer.py      # Step 3 AI 分析
 │   ├── llm_client.py       # 多模型路由（OpenAI 兼容 / Anthropic）
 │   ├── feedback_poster.py  # Step 4 反馈发布
+│   ├── pr_url.py           # PR 链接解析（Web 端复用）
 │   └── main.py             # 编排入口
-├── tests/                  # 单元测试（36 个用例）
+├── tests/                  # 单元测试（46 个用例）
 ├── .env.example            # 环境变量模板
 ├── requirements.txt        # 运行时依赖
 └── requirements-dev.txt    # 开发 / 测试依赖
