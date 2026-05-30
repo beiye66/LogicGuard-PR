@@ -4,9 +4,10 @@
 
 | 文件名 | 内容 | 如何获取 |
 |---|---|---|
-| `action-run-success.png` | GitHub Action「AI PR Review」运行成功的日志（能看到 Step1→4 依次执行、最后发布评论的链接） | 在触发过审查的 PR → 点 **Checks / Details** → 展开「运行 AI 审查」步骤截图 |
-| `bot-review-comment.png` | `github-actions[bot]` 在 PR 下自动发布的审查评论（含变更总结 + 风险清单 + 行号定位） | 打开该 PR 会话区，截取 Bot 评论 |
-| `ci-tests-passing.png` | 单元测试全部通过（28 passed）或 CI 绿勾 | 本地运行 `pytest -v` 截图，或 PR 上「CI / test」绿勾的 Details 截图 |
+| `action-checks-passed.png` | 第三方仓库 PR 上「AI PR Review」检查通过（All checks have passed）的视图 | 该仓库 PR 页面底部「检查」区截图 |
+| `action-external-repo.png` | 在第三方仓库（container-monitor）中，工作流详情里 `Run beiye66/LogicGuard-PR@main` 步骤成功执行 | 该仓库 PR → **Actions** → 进入 review 运行 → 截「Run beiye66/LogicGuard-PR@main」那张 |
+| `review-issues-found.png` | 含多类隐患的 PR 中，`github-actions[bot]` 列出多条风险（并发/除零/资源泄漏/逻辑/边界）并带行号 | 打开含 bug 的 PR 会话区，截取 Bot 评论 |
+| `review-passed.png` | 规范代码的 PR 中，Bot 回复"未发现明显的高风险问题"（低误报） | 打开干净的 PR 会话区，截取 Bot 评论 |
 
 > 复现这些截图的完整步骤见 [`../TEST_PLAN.md`](../TEST_PLAN.md)。
 >

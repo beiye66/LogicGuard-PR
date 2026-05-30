@@ -70,21 +70,34 @@
 
 ## 🎬 演示效果
 
-> 下列截图来自真实的一次自动审查（演示 PR 中故意埋入并发竞态与除零两处隐患）。
+> 以下截图均来自在**另一个真实仓库** [`beiye66/container-monitor`](https://github.com/beiye66/container-monitor) 中接入本工具的实测——
+> 也即"任何人都能用一行 `uses:` 把它装进自己仓库"的真实验证。
 
-**① GitHub Action 自动运行（抓取 → 融合 → 审查 → 发布全流程）**
+### ① 一键接入第三方仓库，自动运行 ✅
 
-![Action 运行成功](docs/images/action-run-success.png)
+仅在目标仓库加一行 `uses: beiye66/LogicGuard-PR@main`，开 PR 即自动触发审查（**无需拷贝任何代码**）。
 
-**② AI 自动发布的审查评论（精准抓出两处隐患并定位行号）**
+PR 上的「AI PR Review」检查自动通过：
 
-![Bot 审查评论](docs/images/bot-review-comment.png)
+![PR 检查通过](docs/images/action-checks-passed.png)
 
-**③ 单元测试与 CI（28 个用例全部通过）**
+工作流详情可见 `Run beiye66/LogicGuard-PR@main` 步骤——证明确实在引用本仓库的可复用 Action：
 
-![CI 测试通过](docs/images/ci-tests-passing.png)
+![Action 在第三方仓库成功运行](docs/images/action-external-repo.png)
 
-> 📌 *截图文件请放置于 [`docs/images/`](docs/images/) 目录，命名见该目录说明；具体复现步骤见 [测试计划](docs/TEST_PLAN.md)。*
+### ② 案例一：代码含多类隐患 → 精准查出 🐞
+
+并发竞态、除零、资源泄漏、逻辑错误、边界情况一网打尽，并**定位到具体行号**：
+
+![查出多处隐患](docs/images/review-issues-found.png)
+
+### ③ 案例二：代码规范无隐患 → 低误报 🤫
+
+没有严重问题时直接回复"未发现明显的高风险问题"，**绝不为凑字数捏造琐碎建议**：
+
+![未发现高风险](docs/images/review-passed.png)
+
+> 📌 *截图文件位于 [`docs/images/`](docs/images/) 目录；复现步骤见 [测试计划](docs/TEST_PLAN.md)。*
 
 ---
 
