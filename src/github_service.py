@@ -16,6 +16,8 @@ import logging
 import os
 
 from dotenv import load_dotenv
+from dataclasses import dataclass, field
+
 from github import Auth, Github, GithubException
 
 # ---------------------------------------------------------------------------
@@ -35,6 +37,21 @@ logging.basicConfig(
 
 # 模块级 logger，名称即当前模块名，便于在大型项目中定位日志来源。
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PRDiff:
+    """PR 差异抓取结果。
+
+    Attributes:
+        files: 形如 ``[{"filename": str, "patch": str}, ...]`` 的含 diff 文件列表。
+        head_sha: 本次抓取对应的 PR head commit SHA（用于记录"已审查到哪个提交"）。
+        incremental: 是否为增量结果（仅包含相对上次审查 SHA 的新增改动）。
+    """
+
+    files: list[dict] = field(default_factory=list)
+    head_sha: str = ""
+    incremental: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -68,47 +85,78 @@ class GitHubPRFetcher:
         self._client: Github = Github(auth=Auth.Token(token))
         logger.info("GitHub 客户端初始化成功。")
 
-    def get_pr_diff(self, repo_name: str, pr_number: int) -> list[dict]:
-        """获取指定 PR 的所有文件差异（diff/patch）。
-
-        遍历目标 PR 的变更文件，仅保留包含 ``patch`` 内容的文件
-        （即有实际文本变更的文件），自动跳过二进制文件以及无 diff 的文件。
+    @staticmethod
+    def _extract_diff_files(files: object) -> list[dict]:
+        """从 PyGithub 的文件对象列表中提取含 patch 的文件。
 
         Args:
-            repo_name: 仓库全名，格式为 ``"owner/repo"``，例如 ``"octocat/Hello-World"``。
-            pr_number: Pull Request 的编号（即 PR 页面 URL 中的数字）。
+            files: 可迭代的文件对象（PullRequest.get_files() 或 Comparison.files）。
 
         Returns:
-            一个字典列表，每个元素形如
-            ``{"filename": <文件路径>, "patch": <该文件的 diff 文本>}``。
-            若 PR 不包含任何文本变更文件，则返回空列表。
+            形如 ``[{"filename": str, "patch": str}, ...]`` 的列表；自动跳过二进制 / 无文本变更文件。
+        """
+        diff_files: list[dict] = []
+        for file in files:
+            # patch 为 None 时通常表示二进制文件或无文本变更（如纯重命名），过滤掉。
+            if not file.patch:
+                logger.info("跳过无 diff 文件（二进制或无文本变更）：%s", file.filename)
+                continue
+            diff_files.append({"filename": file.filename, "patch": file.patch})
+        return diff_files
+
+    def get_pr_diff(
+        self, repo_name: str, pr_number: int, since_sha: str | None = None
+    ) -> PRDiff:
+        """获取指定 PR 的文件差异（支持增量审查）。
+
+        当传入 ``since_sha`` 且其与当前 head 不同时，仅返回 ``since_sha`` 到 head 之间的
+        **增量** 改动（``repo.compare`` 计算）；比较失败时回退为全量。未传 ``since_sha`` 时返回全量；
+        若 ``since_sha`` 已等于当前 head，则表示无新提交，返回空结果。
+
+        Args:
+            repo_name: 仓库全名，格式 ``"owner/repo"``。
+            pr_number: Pull Request 编号。
+            since_sha: 上次已审查到的 commit SHA；为 None 时做全量抓取。
+
+        Returns:
+            :class:`PRDiff`，含文件列表、当前 head SHA 与是否增量的标记。
 
         Raises:
-            github.GithubException: 当仓库不存在、PR 不存在、Token 无效 / 权限不足
-                或其它 GitHub API 错误时抛出（已记录日志后向上抛出，便于调用方处理）。
+            github.GithubException: 当仓库 / PR 不存在、Token 无效 / 权限不足等 API 错误时抛出。
         """
-        # 用于收集所有包含 diff 的文件信息。
-        diff_files: list[dict] = []
-
         try:
-            # 1) 定位仓库与 PR。任何一步出错都会抛出 GithubException。
-            logger.info("正在获取仓库 %s 的 PR #%d ...", repo_name, pr_number)
             repo = self._client.get_repo(repo_name)
             pull_request = repo.get_pull(pr_number)
+            head_sha: str = pull_request.head.sha
 
-            # 2) 遍历 PR 的变更文件，提取 patch。
-            for file in pull_request.get_files():
-                # file.patch 为 None 时通常表示二进制文件或无文本变更（如纯重命名），过滤掉。
-                if not file.patch:
-                    logger.info("跳过无 diff 文件（二进制或无文本变更）：%s", file.filename)
-                    continue
+            # 自上次审查以来无新提交：直接返回空结果，避免重复审查。
+            if since_sha and since_sha == head_sha:
+                logger.info("自上次审查以来无新提交（head=%s），跳过。", head_sha[:7])
+                return PRDiff(files=[], head_sha=head_sha, incremental=True)
 
-                diff_files.append({"filename": file.filename, "patch": file.patch})
+            incremental = False
+            if since_sha:
+                # 增量：比较 since_sha..head；若比较失败（如 force-push 后旧 SHA 失效）则回退全量。
+                try:
+                    logger.info("增量审查：比较 %s..%s", since_sha[:7], head_sha[:7])
+                    files = repo.compare(since_sha, head_sha).files
+                    incremental = True
+                except GithubException as exc:
+                    logger.warning(
+                        "增量比较失败（%s），回退为全量审查。",
+                        getattr(exc, "data", str(exc)),
+                    )
+                    files = pull_request.get_files()
+            else:
+                logger.info("正在获取仓库 %s 的 PR #%d 全量 diff ...", repo_name, pr_number)
+                files = pull_request.get_files()
 
+            diff_files = self._extract_diff_files(files)
             logger.info(
-                "PR #%d 抓取完成，共提取 %d 个含 diff 的文件。",
+                "PR #%d 抓取完成，共提取 %d 个含 diff 的文件（增量=%s）。",
                 pr_number,
                 len(diff_files),
+                incremental,
             )
 
         except GithubException as exc:
@@ -123,7 +171,7 @@ class GitHubPRFetcher:
             # 记录日志后向上抛出，交由调用方决定重试 / 终止流程。
             raise
 
-        return diff_files
+        return PRDiff(files=diff_files, head_sha=head_sha, incremental=incremental)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +185,8 @@ if __name__ == "__main__":
 
     # 初始化抓取器并获取 diff。
     fetcher = GitHubPRFetcher()
-    files = fetcher.get_pr_diff(repo_name=repo_name, pr_number=pr_number)
+    pr_diff = fetcher.get_pr_diff(repo_name=repo_name, pr_number=pr_number)
+    files = pr_diff.files
 
     # 打印抓取结果概览。
     print(f"共获取到 {len(files)} 个含 diff 的文件。")

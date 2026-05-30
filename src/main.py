@@ -77,29 +77,38 @@ def resolve_target(args: argparse.Namespace) -> tuple[str, int]:
 
 
 def run_review(repo_name: str, pr_number: int) -> str | None:
-    """对指定 PR 执行完整审查流程并发布结果。
+    """对指定 PR 执行完整审查流程并发布结果（支持增量审查）。
+
+    先读取上次审查到的 commit SHA：若存在则只抓取自该 SHA 以来的增量改动，
+    否则全量审查；无新变更则跳过。
 
     Args:
         repo_name: 仓库全名 ``owner/repo``。
         pr_number: Pull Request 编号。
 
     Returns:
-        发布 / 更新评论的 html_url；若 PR 无可分析的代码变更则返回 None（跳过发布）。
+        发布 / 更新评论的 html_url；若 PR 无可分析的（新）代码变更则返回 None（跳过发布）。
     """
-    # Step 1：抓取 diff。
     fetcher = GitHubPRFetcher()
-    diff_data = fetcher.get_pr_diff(repo_name, pr_number)
-    if not diff_data:
-        logger.info("PR #%d 无可分析的文本变更，跳过审查与评论。", pr_number)
+    poster = FeedbackPoster()
+
+    # 读取上次审查到的 SHA（用于增量），并据此抓取 diff（Step 1）。
+    last_sha = poster.get_last_reviewed_sha(repo_name, pr_number)
+    pr_diff = fetcher.get_pr_diff(repo_name, pr_number, since_sha=last_sha)
+    if not pr_diff.files:
+        logger.info("PR #%d 无可分析的新增变更，跳过审查与评论。", pr_number)
         return None
 
     # Step 2 + 3：AIReviewer 内部复用 ContextBuilder 做截断融合，再调用 LLM。
     reviewer = AIReviewer()
-    review_markdown = reviewer.analyze_pr(diff_data)
+    review_markdown = reviewer.analyze_pr(pr_diff.files)
+    if pr_diff.incremental:
+        review_markdown = (
+            "> 🔁 本次为**增量审查**（仅针对自上次审查以来的新增改动）。\n\n" + review_markdown
+        )
 
-    # Step 4：发布 / 更新评论。
-    poster = FeedbackPoster()
-    url = poster.post_review(repo_name, pr_number, review_markdown)
+    # Step 4：发布 / 更新评论，并把本次 head SHA 写入隐藏标记，供下次增量使用。
+    url = poster.post_review(repo_name, pr_number, review_markdown, head_sha=pr_diff.head_sha)
     return url
 
 

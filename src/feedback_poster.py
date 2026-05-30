@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 from github import Auth, Github, GithubException
@@ -33,8 +34,11 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# 隐藏标记：写在评论正文里（HTML 注释，渲染时不可见），便于未来识别 / 更新机器人评论。
-_COMMENT_MARKER = "<!-- autonomous-pr-reviewer -->"
+# 隐藏标记前缀：写在评论正文里（HTML 注释，渲染时不可见），用于识别 / 更新本工具发布的评论。
+# 标记中可携带 ``sha=<head>``，记录"已审查到哪个提交"，供增量审查读取。
+_COMMENT_MARKER_PREFIX = "<!-- autonomous-pr-reviewer"
+# 从标记中解析已审查 SHA 的正则。
+_SHA_PATTERN = re.compile(r"<!--\s*autonomous-pr-reviewer\s+sha=([0-9a-fA-F]+)\s*-->")
 
 # 评论标题与签名。
 _COMMENT_TITLE = "## 🤖 Autonomous PR Reviewer"
@@ -63,49 +67,87 @@ class FeedbackPoster:
         self._client: Github = Github(auth=Auth.Token(token))
         logger.info("反馈发布器初始化成功。")
 
-    def _format_comment(self, review_markdown: str) -> str:
+    def _format_comment(self, review_markdown: str, head_sha: str | None = None) -> str:
         """将审查正文包装为最终的评论 Markdown。
 
-        在审查内容外加上统一的标题、签名与隐藏标记，便于识别与未来扩展。
+        在审查内容外加上统一的标题、签名与隐藏标记；标记中携带本次审查到的 head SHA，
+        供下次增量审查读取。
 
         Args:
             review_markdown: Step 3 产出的 Markdown 审查正文。
+            head_sha: 本次审查对应的 head commit SHA；为 None 时标记不含 sha。
 
         Returns:
             可直接作为评论发布的完整 Markdown 文本。
         """
-        return f"{_COMMENT_MARKER}\n{_COMMENT_TITLE}\n\n{review_markdown.strip()}{_COMMENT_FOOTER}"
+        marker = (
+            f"<!-- autonomous-pr-reviewer sha={head_sha} -->"
+            if head_sha
+            else f"{_COMMENT_MARKER_PREFIX} -->"
+        )
+        return f"{marker}\n{_COMMENT_TITLE}\n\n{review_markdown.strip()}{_COMMENT_FOOTER}"
 
     def _find_existing_comment(self, pull_request: object) -> object | None:
-        """在 PR 已有评论中查找本工具上次发布的评论（按隐藏标记识别）。
+        """在 PR 已有评论中查找本工具上次发布的评论（按隐藏标记前缀识别）。
 
         Args:
             pull_request: PyGithub 的 PullRequest 对象。
 
         Returns:
-            匹配到隐藏标记的 IssueComment 对象；未找到则返回 None。
+            最近一条匹配隐藏标记的 IssueComment 对象；未找到则返回 None。
         """
+        found = None
+        # get_issue_comments 按时间正序返回，遍历取最后一条匹配，即最新的机器人评论。
         for comment in pull_request.get_issue_comments():
-            if _COMMENT_MARKER in (comment.body or ""):
-                return comment
-        return None
+            if _COMMENT_MARKER_PREFIX in (comment.body or ""):
+                found = comment
+        return found
+
+    def get_last_reviewed_sha(self, repo_name: str, pr_number: int) -> str | None:
+        """读取上次审查记录的 head SHA（用于增量审查）。
+
+        在 PR 既有的机器人评论的隐藏标记中解析 ``sha=...``。
+
+        Args:
+            repo_name: 仓库全名，格式 ``"owner/repo"``。
+            pr_number: Pull Request 编号。
+
+        Returns:
+            上次审查到的 commit SHA；若无历史评论或解析不到则返回 None。
+            读取失败（API 异常）时记录日志并返回 None，不阻断后续全量审查。
+        """
+        try:
+            repo = self._client.get_repo(repo_name)
+            pull_request = repo.get_pull(pr_number)
+            existing = self._find_existing_comment(pull_request)
+        except GithubException as exc:
+            logger.warning("读取上次审查 SHA 失败，将按全量审查处理：%s", getattr(exc, "data", str(exc)))
+            return None
+
+        if existing is None:
+            return None
+        match = _SHA_PATTERN.search(existing.body or "")
+        return match.group(1) if match else None
 
     def post_review(
         self,
         repo_name: str,
         pr_number: int,
         review_markdown: str,
+        head_sha: str | None = None,
         update_existing: bool = True,
     ) -> str:
         """将审查结果作为 Issue Comment 发布 / 更新到指定 PR。
 
         当 ``update_existing`` 为 True 时，优先查找本工具上次发布的评论（按隐藏标记识别），
         找到则原地更新（edit）而非新建，避免在 PR 多次 push 时刷屏。
+        ``head_sha`` 会写入隐藏标记，供下次增量审查读取"已审查到哪个提交"。
 
         Args:
             repo_name: 仓库全名，格式 ``"owner/repo"``。
             pr_number: 目标 Pull Request 编号。
             review_markdown: 待发布的 Markdown 审查正文（通常来自 AIReviewer.analyze_pr）。
+            head_sha: 本次审查对应的 head commit SHA，写入隐藏标记。
             update_existing: 是否复用并更新已有的机器人评论；默认 True。
 
         Returns:
@@ -120,7 +162,7 @@ class FeedbackPoster:
             logger.error("审查内容为空，拒绝发布空评论。")
             raise ValueError("review_markdown 不能为空。")
 
-        body = self._format_comment(review_markdown)
+        body = self._format_comment(review_markdown, head_sha)
 
         try:
             repo = self._client.get_repo(repo_name)
