@@ -37,7 +37,8 @@
 | ♻️ **增量审查** | PR 多次推送时，仅审查自上次审查以来的**新增改动**（基于评论中记录的 head SHA），节省 token |
 | 💬 **评论防刷屏** | 同一 PR 多次推送时，**原地更新同一条评论**而非反复新建（基于隐藏标记 upsert） |
 | 🌐 **零配置 Web 体验** | 提供 Streamlit 在线体验端：粘贴公开 PR 链接即可看到 AI 审查，无需登录 / 配置密钥 |
-| 🛡️ **工程化健壮** | 全程 `logging`、完整类型注解、防御性异常处理、内置重试；**46 个单元测试 + CI 守护主分支** |
+| 🔑 **BYOK 自带 Key** | Web 端可选「自带 API Key」：在侧边栏选厂商（DeepSeek / Gemini / 豆包 / OpenAI / Claude）填自己的 Key，用自己的额度审查；Key 仅本次使用、不存储 |
+| 🛡️ **工程化健壮** | 全程 `logging`、完整类型注解、防御性异常处理、内置重试；**50 个单元测试 + CI 守护主分支** |
 
 ---
 
@@ -170,7 +171,7 @@ streamlit run app.py
 
 ## ✅ 测试与质量保障
 
-- **单元测试**：共 **46 个用例**，覆盖四个核心模块 + 多模型路由 + 编排器 + URL 解析，全部使用 mock，**不依赖真实 Token / 网络**，可稳定在 CI 运行。
+- **单元测试**：共 **50 个用例**，覆盖四个核心模块 + 多模型路由 + 编排器 + URL 解析，全部使用 mock，**不依赖真实 Token / 网络**，可稳定在 CI 运行。
 - **持续集成**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在每次 push 到 `main` 及任意 PR 时自动运行「语法编译检查 + pytest」，**保证主分支始终可运行**。
 - **测试计划**：详见 [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md)（含自动化测试清单与演示截图复现步骤）。
 
@@ -200,7 +201,7 @@ LogicGuard-PR/
 │   ├── feedback_poster.py  # Step 4 反馈发布
 │   ├── pr_url.py           # PR 链接解析（Web 端复用）
 │   └── main.py             # 编排入口
-├── tests/                  # 单元测试（46 个用例）
+├── tests/                  # 单元测试（50 个用例）
 ├── .env.example            # 环境变量模板
 ├── requirements.txt        # 运行时依赖
 └── requirements-dev.txt    # 开发 / 测试依赖

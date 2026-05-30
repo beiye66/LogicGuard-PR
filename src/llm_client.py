@@ -190,26 +190,64 @@ def create_llm_client(timeout: float = 60.0, max_retries: int = 3) -> LLMClient:
 
     if provider == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("LLM_API_KEY")
-        if not api_key:
-            raise LLMError("未检测到 ANTHROPIC_API_KEY / LLM_API_KEY，无法初始化 Anthropic 客户端。")
+        return build_llm_client(
+            "anthropic", api_key, model, timeout=timeout, max_retries=max_retries
+        )
+
+    if provider == "openai":
+        return build_llm_client(
+            "openai",
+            os.getenv("LLM_API_KEY"),
+            model,
+            base_url=os.getenv("LLM_BASE_URL"),
+            timeout=timeout,
+            max_retries=max_retries,
+        )
+
+    raise LLMError(f"不支持的 LLM_PROVIDER：{provider!r}（仅支持 openai / anthropic）。")
+
+
+def build_llm_client(
+    provider: str,
+    api_key: str | None,
+    model: str | None,
+    base_url: str | None = None,
+    timeout: float = 60.0,
+    max_retries: int = 3,
+) -> LLMClient:
+    """根据显式配置构建 LLM 客户端（供 Web 端 BYOK「自带 Key」模式使用）。
+
+    Args:
+        provider: ``openai``（OpenAI 兼容：OpenAI / DeepSeek / Gemini / 豆包等）或 ``anthropic``。
+        api_key: API Key（必填）。
+        model: 模型 ID；为空时按厂商取默认值。
+        base_url: OpenAI 兼容端点地址；为空时默认 DeepSeek（anthropic 忽略此项）。
+        timeout: 单次请求超时（秒）。
+        max_retries: SDK 内置重试次数。
+
+    Returns:
+        与配置匹配的 :class:`LLMClient` 实例。
+
+    Raises:
+        LLMError: 当缺少 API Key 或 provider 不受支持时抛出。
+    """
+    if not api_key or not api_key.strip():
+        raise LLMError("缺少 API Key，无法初始化 LLM 客户端。")
+
+    provider = (provider or "").strip().lower()
+    if provider == "anthropic":
         return AnthropicClient(
             api_key=api_key,
             model=model or _DEFAULT_ANTHROPIC_MODEL,
             timeout=timeout,
             max_retries=max_retries,
         )
-
     if provider == "openai":
-        api_key = os.getenv("LLM_API_KEY")
-        if not api_key:
-            raise LLMError("未检测到 LLM_API_KEY，无法初始化 OpenAI 兼容客户端。")
-        base_url = os.getenv("LLM_BASE_URL") or _DEFAULT_OPENAI_BASE_URL
         return OpenAICompatibleClient(
             api_key=api_key,
             model=model or _DEFAULT_OPENAI_MODEL,
-            base_url=base_url,
+            base_url=base_url or _DEFAULT_OPENAI_BASE_URL,
             timeout=timeout,
             max_retries=max_retries,
         )
-
-    raise LLMError(f"不支持的 LLM_PROVIDER：{provider!r}（仅支持 openai / anthropic）。")
+    raise LLMError(f"不支持的 provider：{provider!r}（仅支持 openai / anthropic）。")
