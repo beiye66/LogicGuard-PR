@@ -1,5 +1,5 @@
-name: 'Autonomous PR Reviewer'
-description: 'AI 自动代码评审：抓取 PR 变更，用大语言模型审查，并将结果发布为 PR 评论。'
+name: 'LogicGuard – AI PR Reviewer'
+description: 'AI 自动代码评审：抓取 PR 变更，用大语言模型审查（聚焦并发/内存/逻辑/边界等高风险，低误报），并将结果发布为 PR 评论。'
 author: 'beiye66'
 branding:
   icon: 'check-circle'
