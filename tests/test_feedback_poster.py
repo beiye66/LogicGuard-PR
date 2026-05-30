@@ -107,3 +107,56 @@ def test_post_review_reraises_api_error(
     poster = FeedbackPoster()
     with pytest.raises(GithubException):
         poster.post_review("owner/repo", 1, "## 变更总结\nok")
+
+
+@patch("feedback_poster.Github")
+def test_post_review_embeds_head_sha_in_marker(
+    mock_github_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """传入 head_sha 时，评论隐藏标记应携带 sha=<head_sha>。"""
+    monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
+    mock_client = MagicMock()
+    mock_github_cls.return_value = mock_client
+    mock_pr = MagicMock()
+    mock_pr.get_issue_comments.return_value = []
+    mock_client.get_repo.return_value.get_pull.return_value = mock_pr
+
+    poster = FeedbackPoster()
+    poster.post_review("owner/repo", 1, "## 变更总结\nok", head_sha="abc123")
+
+    posted_body = mock_pr.create_issue_comment.call_args.args[0]
+    assert "<!-- autonomous-pr-reviewer sha=abc123 -->" in posted_body
+
+
+@patch("feedback_poster.Github")
+def test_get_last_reviewed_sha(
+    mock_github_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """get_last_reviewed_sha 应从既有评论标记中解析出 sha。"""
+    monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
+    mock_client = MagicMock()
+    mock_github_cls.return_value = mock_client
+    mock_pr = MagicMock()
+    comment = MagicMock()
+    comment.body = "<!-- autonomous-pr-reviewer sha=deadbeef -->\n## 🤖 Autonomous PR Reviewer\n..."
+    mock_pr.get_issue_comments.return_value = [comment]
+    mock_client.get_repo.return_value.get_pull.return_value = mock_pr
+
+    poster = FeedbackPoster()
+    assert poster.get_last_reviewed_sha("owner/repo", 1) == "deadbeef"
+
+
+@patch("feedback_poster.Github")
+def test_get_last_reviewed_sha_none_when_no_comment(
+    mock_github_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """无历史机器人评论时，get_last_reviewed_sha 返回 None。"""
+    monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
+    mock_client = MagicMock()
+    mock_github_cls.return_value = mock_client
+    mock_pr = MagicMock()
+    mock_pr.get_issue_comments.return_value = []
+    mock_client.get_repo.return_value.get_pull.return_value = mock_pr
+
+    poster = FeedbackPoster()
+    assert poster.get_last_reviewed_sha("owner/repo", 1) is None

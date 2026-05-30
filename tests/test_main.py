@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import main as main_module
+from github_service import PRDiff
 from main import main, resolve_target, run_review
 
 
@@ -56,20 +57,25 @@ def test_run_review_wires_pipeline(
     mock_reviewer_cls: MagicMock,
     mock_poster_cls: MagicMock,
 ) -> None:
-    """run_review 应依次串联 抓取→审查→发布，并返回评论 url。"""
-    mock_fetcher_cls.return_value.get_pr_diff.return_value = [{"filename": "a.py", "patch": "+x"}]
+    """run_review 应依次串联 读SHA→抓取→审查→发布，并返回评论 url。"""
+    mock_poster_cls.return_value.get_last_reviewed_sha.return_value = None
+    mock_fetcher_cls.return_value.get_pr_diff.return_value = PRDiff(
+        files=[{"filename": "a.py", "patch": "+x"}], head_sha="h1", incremental=False
+    )
     mock_reviewer_cls.return_value.analyze_pr.return_value = "## 变更总结\nok"
     mock_poster_cls.return_value.post_review.return_value = "https://example/comment"
 
     url = run_review("owner/repo", 1)
 
     assert url == "https://example/comment"
-    mock_fetcher_cls.return_value.get_pr_diff.assert_called_once_with("owner/repo", 1)
+    mock_fetcher_cls.return_value.get_pr_diff.assert_called_once_with(
+        "owner/repo", 1, since_sha=None
+    )
     mock_reviewer_cls.return_value.analyze_pr.assert_called_once_with(
         [{"filename": "a.py", "patch": "+x"}]
     )
     mock_poster_cls.return_value.post_review.assert_called_once_with(
-        "owner/repo", 1, "## 变更总结\nok"
+        "owner/repo", 1, "## 变更总结\nok", head_sha="h1"
     )
 
 
@@ -81,8 +87,11 @@ def test_run_review_skips_when_no_diff(
     mock_reviewer_cls: MagicMock,
     mock_poster_cls: MagicMock,
 ) -> None:
-    """无可分析变更时应跳过审查与发布，返回 None。"""
-    mock_fetcher_cls.return_value.get_pr_diff.return_value = []
+    """无可分析（新增）变更时应跳过审查与发布，返回 None。"""
+    mock_poster_cls.return_value.get_last_reviewed_sha.return_value = "h0"
+    mock_fetcher_cls.return_value.get_pr_diff.return_value = PRDiff(
+        files=[], head_sha="h0", incremental=True
+    )
 
     assert run_review("owner/repo", 1) is None
     mock_reviewer_cls.return_value.analyze_pr.assert_not_called()
