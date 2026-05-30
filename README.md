@@ -21,7 +21,7 @@
 
 > 无需登录、无需配置密钥，粘贴任意公开 GitHub PR 链接即可看到 AI 审查结果：
 >
-> ### 👉 [在此处粘贴你的 Hugging Face Spaces 在线体验链接](https://huggingface.co/spaces)
+> ### 👉 [点此打开在线体验端（Hugging Face Spaces）](https://huggingface.co/spaces/beiye66/Autonomous-PR-Reviewer)
 
 ---
 
