@@ -1,0 +1,7 @@
+# GitHub Action 运行所需的精简运行时依赖（不含 Web 端的 streamlit）。
+# Action 只跑 src/main.py（抓取→审查→评论），无需 Web UI 依赖，保持安装轻量。
+anthropic==0.105.2
+openai==2.38.0
+PyGithub==2.9.1
+python-dotenv==1.2.1
+requests==2.32.5

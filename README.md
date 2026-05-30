@@ -88,22 +88,47 @@ flowchart LR
 | [`src/llm_client.py`](src/llm_client.py) | **多模型路由** LLM 客户端抽象 | OpenAI 兼容 / Anthropic 双后端；按 `LLM_PROVIDER` 或模型名路由；统一异常与重试 |
 | [`src/feedback_poster.py`](src/feedback_poster.py) | **Step 4** 发布审查评论 | Issue Comment；隐藏标记 upsert 防刷屏 + 记录已审查 SHA（供增量）；空内容拒发 |
 | [`src/main.py`](src/main.py) | **编排器** 串联四步 | 目标按「命令行 > 环境变量」解析；统一兜底与退出码 |
-| [`.github/workflows/review.yml`](.github/workflows/review.yml) | **GitHub Action** | `pull_request` 触发，自动运行编排器 |
+| [`action.yml`](action.yml) | **可复用 Action** | 封装为 composite Action，别人 `uses: beiye66/LogicGuard-PR@main` 即可接入 |
+| [`.github/workflows/review.yml`](.github/workflows/review.yml) | **GitHub Action** | `pull_request` 触发，通过 `uses: ./` 复用上面的 Action |
 
 ---
 
 ## 🚀 快速开始
 
-### 方式一：作为 GitHub Action 自动运行（推荐）
+### 方式一：作为 GitHub Action 接入你自己的仓库（推荐）⭐
 
-1. 将本项目代码放入目标仓库（或直接在本仓库使用）。
-2. 在 **仓库 Settings → Secrets and variables → Actions** 配置：
-   - **Secret** `LLM_API_KEY` —— 你的大模型 API Key（OpenAI 兼容厂商；Claude 用 `ANTHROPIC_API_KEY`）
-   - **Variable** `LLM_BASE_URL` —— 接口地址，例如 Gemini：`https://generativelanguage.googleapis.com/v1beta/openai/`
-   - **Variable** `LLM_MODEL` —— 模型 ID，例如 `gemini-2.5-flash`、`gpt-4o`、`claude-sonnet-4-6`
-   - **Variable** `LLM_PROVIDER`（可选）—— `openai` / `anthropic`；留空则按模型名自动推断（`claude*` → anthropic）
-   > `GITHUB_TOKEN` 由 Actions 自动提供，无需配置。
-3. 之后任何人在该仓库**开 PR 或推送新 commit**，即自动触发审查并在 PR 下发布评论。
+本项目已封装为**可复用的 GitHub Action**，**无需拷贝任何代码**——在你的仓库里加一个 workflow 文件即可。
+
+**第 1 步**：在你的仓库新建 `.github/workflows/ai-review.yml`：
+
+```yaml
+name: AI PR Review
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+permissions:
+  contents: read
+  pull-requests: write   # 让 Action 能在 PR 下发评论
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: beiye66/LogicGuard-PR@main   # 直接引用本 Action，无需拷贝代码
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}   # Actions 自动提供，无需手动配置
+          llm-api-key: ${{ secrets.LLM_API_KEY }}
+          llm-base-url: ${{ vars.LLM_BASE_URL }}       # 例：https://api.deepseek.com
+          llm-model: ${{ vars.LLM_MODEL }}             # 例：deepseek-chat / gemini-2.5-flash / claude-sonnet-4-6
+          llm-provider: ${{ vars.LLM_PROVIDER }}       # 可选：openai / anthropic（留空按模型名推断）
+```
+
+**第 2 步**：在 **你的仓库 → Settings → Secrets and variables → Actions** 配置：
+- **Secret** `LLM_API_KEY` —— 你的大模型 API Key
+- **Variable** `LLM_BASE_URL` / `LLM_MODEL`（按你用的厂商填）
+
+**第 3 步**：之后任何人在你的仓库**开 PR 或推送新 commit**，即自动触发审查并在 PR 下发布评论。
+
+> 复用 Action 的定义见 [`action.yml`](action.yml)；本仓库自身的 [`review.yml`](.github/workflows/review.yml) 也通过 `uses: ./` 引用它（dogfooding，与外部用法一致）。
 
 ### 方式二：本地命令行运行
 
@@ -192,6 +217,8 @@ LogicGuard-PR/
 ├── docs/
 │   ├── images/             # README 演示截图
 │   └── TEST_PLAN.md        # 测试计划
+├── action.yml              # 可复用 GitHub Action 定义（供他人 uses 引用）
+├── Dockerfile              # HF Spaces（Docker SDK）部署 Web 端
 ├── app.py                  # Web 体验端入口（Streamlit）
 ├── src/
 │   ├── github_service.py   # Step 1 数据抓取
@@ -203,7 +230,8 @@ LogicGuard-PR/
 │   └── main.py             # 编排入口
 ├── tests/                  # 单元测试（50 个用例）
 ├── .env.example            # 环境变量模板
-├── requirements.txt        # 运行时依赖
+├── requirements.txt        # 运行时依赖（含 Web 端 streamlit）
+├── requirements-action.txt # GitHub Action 精简运行时依赖（不含 streamlit）
 └── requirements-dev.txt    # 开发 / 测试依赖
 ```
 

@@ -1,0 +1,50 @@
+name: 'Autonomous PR Reviewer'
+description: 'AI 自动代码评审：抓取 PR 变更，用大语言模型审查，并将结果发布为 PR 评论。'
+author: 'beiye66'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  github-token:
+    description: 'GitHub Token，用于读取 PR 与发布评论（一般传 secrets.GITHUB_TOKEN）'
+    required: true
+  llm-api-key:
+    description: '大语言模型 API Key'
+    required: true
+  llm-base-url:
+    description: 'OpenAI 兼容端点地址（留空默认 DeepSeek；Gemini/豆包等按厂商填写）'
+    required: false
+    default: ''
+  llm-model:
+    description: '模型 ID（留空默认 deepseek-chat）'
+    required: false
+    default: ''
+  llm-provider:
+    description: 'openai / anthropic（留空则按模型名自动推断，claude* → anthropic）'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r "${{ github.action_path }}/requirements-action.txt"
+
+    - name: Run AI review
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        LLM_API_KEY: ${{ inputs.llm-api-key }}
+        LLM_BASE_URL: ${{ inputs.llm-base-url }}
+        LLM_MODEL: ${{ inputs.llm-model }}
+        LLM_PROVIDER: ${{ inputs.llm-provider }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: python "${{ github.action_path }}/src/main.py"
