@@ -1,9 +1,9 @@
 <!-- markdownlint-disable MD033 MD041 -->
 <div align="center">
 
-# 🤖 Autonomous-PR-Reviewer
+# 🤖 LogicGuard – AI PR Reviewer
 
-**全自动 AI 代码评审工具 —— 开发者提交 PR，系统自动抓取代码变更、用大语言模型智能审查，并将结果自动回复到 PR 评论区。最终形态为开箱即用的 GitHub Action。**
+**全自动 AI 代码评审工具 —— 开发者提交 PR，系统自动抓取代码变更、用大语言模型智能审查，并将结果自动回复到 PR 评论区。已发布为 GitHub Marketplace Action，一行即可接入。**
 
 </div>
 
