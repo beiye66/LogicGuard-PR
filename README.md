@@ -13,7 +13,7 @@
 
 > 🎬 **作品演示与讲解视频，请点击观看：**
 >
-> ### 👉 [在此处粘贴你的 Bilibili 视频链接](https://www.bilibili.com/)
+> ### 👉 [点此观看作品演示与讲解视频（Bilibili）](https://www.bilibili.com/video/BV1dPVQ6BET9/)
 >
 > *（评委可通过此视频快速了解作品的设计思路与实际运行效果。）*
 
@@ -289,9 +289,3 @@ LogicGuard-PR/
 
 - [ ] **行级评论（Review Comment）**：将风险直接锚定到具体代码行（GitHub Review Comment）。当前出于稳定性优先，采用「整体评论 + 文本标注行号」；行级锚定需 LLM 输出可靠的 diff 位置，计划在行号定位足够稳健后引入。
 - [ ] **审查报告导出 / 团队级配置**：支持导出审查报告，以及组织级统一规则配置。
-
----
-
-<div align="center">
-<sub>本项目为 Hackathon 参赛作品，采用「每个 PR 只做一件事」的迭代方式开发，提交历史完整可追溯。</sub>
-</div>
