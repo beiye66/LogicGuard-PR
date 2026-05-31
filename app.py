@@ -1,4 +1,4 @@
-"""app.py —— Autonomous PR Reviewer 的 Web 体验端（Streamlit）。
+"""app.py —— LogicGuard – AI PR Reviewer 的 Web 体验端（Streamlit）。
 
 面向评委 / 试用者：粘贴任意**公开** GitHub PR 链接，后端复用项目的完整 Pipeline
 （GitHubPRFetcher → ContextBuilder → AIReviewer）跑一遍审查，并把 Markdown 结果渲染到页面。
@@ -44,7 +44,7 @@ PROVIDER_PRESETS: dict[str, tuple[str, str, str]] = {
     "自定义（OpenAI 兼容）": ("openai", "", ""),
 }
 
-st.set_page_config(page_title="Autonomous PR Reviewer", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="LogicGuard – AI PR Reviewer", page_icon="🤖", layout="centered")
 
 
 @st.cache_resource(show_spinner=False)
@@ -161,7 +161,7 @@ def main() -> None:
     """渲染页面并处理交互。"""
     config = _render_sidebar()
 
-    st.title("🤖 Autonomous PR Reviewer")
+    st.title("🤖 LogicGuard – AI PR Reviewer")
     st.caption("AI 自动代码评审工具 · 在线体验端")
     st.markdown(
         "粘贴任意**公开** GitHub PR 链接，AI 会自动抓取代码变更，给出 **变更总结** 与 "
@@ -205,7 +205,7 @@ def main() -> None:
     else:
         source = f"本站默认模型：`{os.getenv('LLM_MODEL') or 'deepseek-chat'}`"
     st.divider()
-    st.caption(f"由 Autonomous-PR-Reviewer 提供支持 · {source} · 本页面仅展示审查结果，不发布评论。")
+    st.caption(f"由 LogicGuard – AI PR Reviewer 提供支持 · {source} · 本页面仅展示审查结果，不发布评论。")
 
 
 if __name__ == "__main__":
