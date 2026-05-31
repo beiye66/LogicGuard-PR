@@ -46,7 +46,7 @@ def test_post_review_creates_issue_comment(
     # 校验发布的正文经过包装：含隐藏标记与标题，且保留原始审查内容。
     posted_body = mock_pr.create_issue_comment.call_args.args[0]
     assert "<!-- autonomous-pr-reviewer -->" in posted_body
-    assert "🤖 Autonomous PR Reviewer" in posted_body
+    assert "🤖 LogicGuard – AI PR Reviewer" in posted_body
     assert "做了改动。" in posted_body
 
 
@@ -62,7 +62,7 @@ def test_post_review_updates_existing_comment(
     mock_pr = MagicMock()
 
     existing = MagicMock()
-    existing.body = "<!-- autonomous-pr-reviewer -->\n## 🤖 Autonomous PR Reviewer\n旧内容"
+    existing.body = "<!-- autonomous-pr-reviewer -->\n## 🤖 LogicGuard – AI PR Reviewer\n旧内容"
     existing.html_url = "https://github.com/owner/repo/pull/1#issuecomment-old"
     other = MagicMock()
     other.body = "一条普通的人工评论"
@@ -138,7 +138,7 @@ def test_get_last_reviewed_sha(
     mock_github_cls.return_value = mock_client
     mock_pr = MagicMock()
     comment = MagicMock()
-    comment.body = "<!-- autonomous-pr-reviewer sha=deadbeef -->\n## 🤖 Autonomous PR Reviewer\n..."
+    comment.body = "<!-- autonomous-pr-reviewer sha=deadbeef -->\n## 🤖 LogicGuard – AI PR Reviewer\n..."
     mock_pr.get_issue_comments.return_value = [comment]
     mock_client.get_repo.return_value.get_pull.return_value = mock_pr
 

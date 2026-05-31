@@ -41,8 +41,8 @@ _COMMENT_MARKER_PREFIX = "<!-- autonomous-pr-reviewer"
 _SHA_PATTERN = re.compile(r"<!--\s*autonomous-pr-reviewer\s+sha=([0-9a-fA-F]+)\s*-->")
 
 # 评论标题与签名。
-_COMMENT_TITLE = "## 🤖 Autonomous PR Reviewer"
-_COMMENT_FOOTER = "\n\n---\n<sub>本评论由 Autonomous-PR-Reviewer 自动生成。</sub>"
+_COMMENT_TITLE = "## 🤖 LogicGuard – AI PR Reviewer"
+_COMMENT_FOOTER = "\n\n---\n<sub>本评论由 LogicGuard – AI PR Reviewer 自动生成。</sub>"
 
 
 class FeedbackPoster:
